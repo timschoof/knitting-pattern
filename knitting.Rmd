@@ -1,0 +1,265 @@
+---
+title: "The future of data science includes slow data science"
+output:
+  html_document: default
+---
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+# load packages
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(stringr)
+library(owidR) # devtools::install_github("piersyork/owidR")
+library(janitor)
+```
+
+```{r}
+######################################################################################
+
+# Personalize the pattern by setting the stitch rate (i.e., number of stitches you knit per minute)
+stitch_rate = 20 # average is 20-30
+
+######################################################################################
+```
+
+```{r}
+# specify pattern dimensions
+nstitches = 200
+nrows = 40 # Warning: this is currently hard-coded in the "Pattern" section below
+# specify number of knit rows at the start and end of the pattern (i.e. no bobbles)
+nknit_start = 2
+nknit_end = 2
+# specify stitch location of first bobble
+first_bobble = 10
+# specify knitting method (circular or flat)
+method = "circular"
+# indicate whether you would like to jitter the location of the bobbles (yes or no)
+jitter = "yes"
+# jitter amount (this variable is used if jitter == "yes")
+jitter_amount = 3
+```
+
+
+```{r}
+# load data from https://ourworldindata.org/maternal-mortality
+data <- owid("number-of-maternal-deaths-by-region")
+
+# compute number of maternal deaths per minute in the world
+d <- data %>%
+  clean_names() %>%
+  filter(code == "OWID_WRL",
+         year == max(year)) %>%
+  mutate(event_per_min = number_of_maternal_deaths/525960) # 525960 minutes per year
+
+# set bobble frequency to number of maternal deaths per minute in the world
+event_per_min = d$event_per_min
+
+# some basic computations
+tot_bobble_rows = nrows - nknit_start - nknit_end
+bobble_freq =  round(stitch_rate / event_per_min)
+total_stitches = nstitches * nrows
+
+# determine stitch location of bobbles 
+for (i in 1:tot_bobble_rows) {
+  if (i == 1) {
+    x_add = seq(from = first_bobble, to = nstitches, by = bobble_freq)
+    x = x_add
+    bobbles_row = length(x)
+    y = rep(i+nknit_start,bobbles_row)
+  }
+  else {
+    if (method == "circular") {
+      prev_bobble = x_add[length(x_add)]
+      next_bobble = bobble_freq - (nstitches - prev_bobble)
+      x_add = seq(from = next_bobble, to = nstitches, by = bobble_freq)
+    }
+    else {
+      if ((i %% 2) == 0) {
+        # even rows
+        prev_bobble = x_add[length(x_add)]
+        next_bobble = nstitches - prev_bobble
+        
+        odd_dir_bobble = nstitches - (bobble_freq - next_bobble) + 1
+        
+        x_add = seq(from = odd_dir_bobble, to = 1, by = -1*bobble_freq)
+      }
+      else {
+        # odd rows
+        prev_bobble = x_add[length(x_add)]
+        next_bobble = (bobble_freq - prev_bobble) + 1
+        
+        x_add = seq(from = next_bobble, to = nstitches, by = bobble_freq)
+      }
+    }
+    bobbles_row = length(x_add)
+    x = append(x, x_add)
+    y_add = rep(i+nknit_start,bobbles_row)
+    y = append(y,y_add)
+  }
+}
+
+# create data frame
+# optional: add jitter along x-axis (i.e. stitches)
+if (jitter == "no") {
+  df = tibble(x = x,
+              y = y)
+} else {
+  df = tibble(x = round(jitter(x, amount = jitter_amount)),
+              y = y)
+  # prevent values from going negative
+  df = df %>% 
+    mutate(x = if_else(x < 1, 1, x))
+}
+
+# compute inter-bobble timings
+dft <- df %>% 
+  arrange(y,x) %>% 
+  group_by(y) %>% 
+  group_modify(~ add_row(.x, x = 201)) %>% 
+  mutate(knit = x -1, 
+         diff = lag(x),
+         k = if_else(is.na(diff), knit, knit-diff),
+         index = paste("ind_", row_number(), sep ="")) %>% 
+  select(-knit, -diff) %>% 
+  ungroup()
+
+# write out pattern
+pat <- dft %>% 
+  select(-x) %>% 
+  pivot_wider(id_cols = y, names_from = index, values_from = k) %>% 
+  rowwise() %>%
+  # write out pattern
+  unite_("pattern", colnames(.)[-1]) %>%
+  mutate(pattern = str_replace_all(pattern, "_", ", mb, k"),
+         pattern = str_remove(pattern, ", mb, kNA"),
+         pattern = paste("k", pattern, sep = ""),
+         row = paste("Row ", y, ":",sep = "")) %>% 
+  # add first and last rounds of knitting
+  add_row(y = 1, row = paste("Row 1-", nknit_start, ":", sep = ""), pattern = paste("k", nstitches, sep = "")) %>% 
+  add_row(y = nrows-(nknit_end-1), row = paste("Row ",nrows-(nknit_end-1), "-", nrows, ":", sep = ""), pattern = paste("k", nstitches, sep = "")) %>% 
+  arrange(y)
+```
+
+
+```{r, eval = F}
+# specify y-axis labels
+y_left = rep("",nrows)
+y_right = rep("",nrows)
+y_left[seq(from = 2, to = nrows, by = 2)] <- seq(from = 2, to = nrows, by = 2)
+y_right[seq(from = 1, to = nrows, by = 2)] <- seq(from = 1, to = nrows, by = 2)
+
+# plot knitting pattern 
+p = df %>% 
+  ggplot(aes(x = x, y = y)) +
+  geom_point(pch = 15, size = 0.5, stroke = 1) # pch = 5, size = 2
+if (method == "circular") {
+  p = p + scale_y_continuous(breaks = seq(from = 1, to = nrows, by = 1), position = "right")
+} else {
+  p = p + scale_y_continuous(breaks = seq(from = 1, to = nrows, by = 1),
+                             labels = y_left,
+                             sec.axis = sec_axis(~ . *1,
+                                                 breaks = seq(from = 1, to = nrows, by = 1),
+                                                 labels = y_right))
+}
+p + scale_x_reverse(breaks = seq(from = nstitches, to = 1, by = -1)) +
+  coord_fixed(xlim =c(nstitches+0.5, 0.5), ylim = c(0.5,nrows+0.5), clip = "on", expand = FALSE) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_line(size = 0.5, colour= "darkgray"),
+        axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        #axis.text.y = element_text(size = 10, face = "bold", colour = "black"),
+        #axis.text.x = element_blank(),
+        axis.text = element_blank())
+
+#ggsave("maternal.jpg",dpi = 300)
+```
+
+```{r, fig.alt="Knitting chart illustrating the approximate location of the bobbles on a 200-stitch by 40-row knitting pattern."}
+knitr::include_graphics("maternal2.jpg")
+```
+
+As data consumers, we often don't spend a lot of time digesting a piece of data. We'll see a cool graph in our Twitter feed, like it, and continue scrolling. Or we might read a journal article, inspect the figure for a few minutes, pass a quick judgment on the authors, and skip to the conclusions. Unless we work closely with the data, day in, day out, it is not very often that we really sit with the data, and let its stories, context, and wider implications really sink in. 
+
+I believe that the future of data science should include "slow data science". Just like "slow TV", data can be consumed as a marathon event, at the pace at which it naturally unfolds. Slow TV typically covers an ordinary event, such as [a train journey across Norway](https://www.youtube.com/watch?v=3rDjPLvOShM) or [the knitting of a sweater](https://tv.nrk.no/serie/national-knitting-eve/2013/DVNR30004613/avspiller). Similarly, slow data science may be particularly well suited to help us reflect on everyday events that happen all around us.
+
+The idea of slow data science ties in with the concept of "[data visceralization](https://www.theatlantic.com/technology/archive/2014/05/data-visceralization/370899/)". Visceralizations are representations of data that rely on all our senses to create an emotional as well as physical experience. A great example of data visceralization is [*A Sort of Joy (Thousands of Exhausted Things*](https://vimeo.com/133815147), a performance of New York’s Museum of Modern Art (MoMA) 123,951 object collections database.
+
+As an example of data visceralization, in the context of slow data science, I have created a data-driven knitting pattern. The idea behind using a knitting pattern - not the knitted end product - to represent data is that it really allows you to slow down and experience the data in real time. It is as much about the process, the experience, as it is about the end product. The end product, by the way, is an infinity scarf. 
+
+This knitting pattern is designed to visceralize how often mothers still die in childbirth around the world. The pattern is based on data from [Our World in Data](https://ourworldindata.org/maternal-mortality). In 2017, `r d$number_of_maternal_deaths` people died in childbirth around the world. That comes down to one human life lost approximately every two minutes. While maternal mortality rates have certainly declined over the last century, too many people still lose their lives. As Our World in Data points out, "if we can make maternal deaths as rare as they are in the healthiest countries we can save almost 300,000 mothers each year". Maternal deaths are represented in this pattern by [bobbles](https://www.thesprucecrafts.com/three-dimensional-texture-by-making-bobbles-2116336) that are spaced roughly 2 minutes of knitting apart.
+
+The pattern assumes an average knitting pace of 20 stitches per minute. The infinity scarf covers about 6 hours and 45 minutes of data (8000 stitches at 20 stitches per minute). However, the bobbles will take longer to knit than the regular stitches, slowing you down, forcing you to reflect on the fact that every data point, every bobble, represents a real human being that lost their life in childbirth. Expect the total knitting time to be around 9 hours. This pattern was specifically designed as an infinity scarf, stressing the fact that the events continue to unfold, even when you are not knitting.
+
+### Materials
+
+* Medium or worsted weight yarn
+* US size 9 (5.5 mm) circular knitting needles
+* stitch marker
+
+**Gauge:**  <br>
+16 sts / 21 rows = 4" (10 cm) <br>
+Use any size needles to obtain gauge.
+
+**Scarf dimensions:** <br>
+48" (122 cm) by 8" (20 cm)
+
+### Stitches
+
+**k:** knit <br>
+**p:** purl <br>
+**mb (make bobble):** k1, p1, k1, p1, k1 into next stitch, turn, p5, turn, k5, pass the 4 stitches one at a time over the knit stitch and off the needle to finish bobble
+
+### Pattern
+
+**Cast on `r nstitches` stitches.** Be careful not to twist any stitches when joining knitting in the round. Place a marker at the beginning of the round.
+
+**`r pat$row[1]`** `r pat$pattern[1]` <br>
+**`r pat$row[2]`** `r pat$pattern[2]` <br>
+**`r pat$row[3]`** `r pat$pattern[3]` <br>
+**`r pat$row[4]`** `r pat$pattern[4]` <br>
+ <br>
+**`r pat$row[5]`** `r pat$pattern[5]` <br>
+**`r pat$row[6]`** `r pat$pattern[6]` <br>
+**`r pat$row[7]`** `r pat$pattern[7]` <br>
+**`r pat$row[8]`** `r pat$pattern[8]` <br>
+**`r pat$row[9]`** `r pat$pattern[9]` <br>
+ <br>
+**`r pat$row[10]`** `r pat$pattern[10]` <br>
+**`r pat$row[11]`** `r pat$pattern[11]` <br>
+**`r pat$row[12]`** `r pat$pattern[12]` <br>
+**`r pat$row[13]`** `r pat$pattern[13]` <br>
+**`r pat$row[14]`** `r pat$pattern[14]` <br>
+ <br>
+**`r pat$row[15]`** `r pat$pattern[15]` <br>
+**`r pat$row[16]`** `r pat$pattern[16]` <br>
+**`r pat$row[17]`** `r pat$pattern[17]` <br>
+**`r pat$row[18]`** `r pat$pattern[18]` <br>
+**`r pat$row[19]`** `r pat$pattern[19]` <br>
+ <br>
+**`r pat$row[20]`** `r pat$pattern[20]` <br>
+**`r pat$row[21]`** `r pat$pattern[21]` <br>
+**`r pat$row[22]`** `r pat$pattern[22]` <br>
+**`r pat$row[23]`** `r pat$pattern[23]` <br>
+**`r pat$row[24]`** `r pat$pattern[24]` <br>
+ <br>
+**`r pat$row[25]`** `r pat$pattern[25]` <br>
+**`r pat$row[26]`** `r pat$pattern[26]` <br>
+**`r pat$row[27]`** `r pat$pattern[27]` <br>
+**`r pat$row[28]`** `r pat$pattern[28]` <br>
+**`r pat$row[29]`** `r pat$pattern[29]` <br>
+ <br>
+**`r pat$row[30]`** `r pat$pattern[30]` <br>
+**`r pat$row[31]`** `r pat$pattern[31]` <br>
+**`r pat$row[32]`** `r pat$pattern[32]` <br>
+**`r pat$row[33]`** `r pat$pattern[33]` <br>
+**`r pat$row[34]`** `r pat$pattern[34]` <br>
+ <br>
+**`r pat$row[35]`** `r pat$pattern[35]` <br>
+**`r pat$row[36]`** `r pat$pattern[36]` <br>
+**`r pat$row[37]`** `r pat$pattern[37]` <br>
+**`r pat$row[38]`** `r pat$pattern[38]` <br>
+
