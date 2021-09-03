@@ -1,0 +1,12 @@
+install.packages(
+  "dplyr",
+  "ggplot2",
+  "janitor",
+  "knitr",
+  "magick",
+  "owidR",
+  "renv",
+  "rmarkdown",
+  "stringr",
+  "tidyr"
+)
