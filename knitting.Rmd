@@ -14,6 +14,7 @@ library(tidyr)
 library(stringr)
 library(owidR) # devtools::install_github("piersyork/owidR")
 library(janitor)
+library(magick)
 ```
 
 ```{r}
@@ -144,7 +145,7 @@ pat <- dft %>%
 ```
 
 
-```{r, eval = F}
+```{r}
 # specify y-axis labels
 y_left = rep("",nrows)
 y_right = rep("",nrows)
@@ -154,7 +155,8 @@ y_right[seq(from = 1, to = nrows, by = 2)] <- seq(from = 1, to = nrows, by = 2)
 # plot knitting pattern 
 p = df %>% 
   ggplot(aes(x = x, y = y)) +
-  geom_point(pch = 15, size = 0.5, stroke = 1) # pch = 5, size = 2
+  #geom_jitter(pch = 15, size = 0.5, stroke = 1, width = 3, height = 0, seed = 1984)
+  geom_point(pch = 15, size = 0.5, stroke = 1)
 if (method == "circular") {
   p = p + scale_y_continuous(breaks = seq(from = 1, to = nrows, by = 1), position = "right")
 } else {
@@ -164,7 +166,7 @@ if (method == "circular") {
                                                  breaks = seq(from = 1, to = nrows, by = 1),
                                                  labels = y_right))
 }
-p + scale_x_reverse(breaks = seq(from = nstitches, to = 1, by = -1)) +
+p = p + scale_x_reverse(breaks = seq(from = nstitches, to = 1, by = -1)) +
   coord_fixed(xlim =c(nstitches+0.5, 0.5), ylim = c(0.5,nrows+0.5), clip = "on", expand = FALSE) +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
@@ -175,11 +177,12 @@ p + scale_x_reverse(breaks = seq(from = nstitches, to = 1, by = -1)) +
         #axis.text.x = element_blank(),
         axis.text = element_blank())
 
-#ggsave("maternal.jpg",dpi = 300)
+ggsave("knittingChart.jpg",plot = p, dpi = 300)
 ```
 
 ```{r, fig.alt="Knitting chart illustrating the approximate location of the bobbles on a 200-stitch by 40-row knitting pattern."}
-knitr::include_graphics("maternal2.jpg")
+img = image_read("knittingChart.jpg")
+image_trim(img)
 ```
 
 As data consumers, we often don't spend a lot of time digesting a piece of data. We'll see a cool graph in our Twitter feed, like it, and continue scrolling. Or we might read a journal article, inspect the figure for a few minutes, pass a quick judgment on the authors, and skip to the conclusions. Unless we work closely with the data, day in, day out, it is not very often that we really sit with the data, and let its stories, context, and wider implications really sink in. 
