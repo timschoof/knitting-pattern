@@ -134,10 +134,13 @@ pat <- dft %>%
   rowwise() %>%
   # write out pattern
   unite_("pattern", colnames(.)[-1]) %>%
-  mutate(pattern = str_replace_all(pattern, "_", ", mb, k"),
+  mutate(pattern = str_replace(pattern, regex("^0_"), "mb, k"),
+         pattern = str_remove(pattern, "_0"),
+         pattern = str_replace_all(pattern, "_", ", mb, k"),
          pattern = str_remove(pattern, ", mb, kNA"),
          pattern = paste("k", pattern, sep = ""),
-         row = paste("Row ", y, ":",sep = "")) %>% 
+         pattern = str_replace(pattern, "kmb", "mb"),
+         row = paste("Row ", y, ":", sep = "")) %>% 
   # add first and last rounds of knitting
   add_row(y = 1, row = paste("Row 1-", nknit_start, ":", sep = ""), pattern = paste("k", nstitches, sep = "")) %>% 
   add_row(y = nrows-(nknit_end-1), row = paste("Row ",nrows-(nknit_end-1), "-", nrows, ":", sep = ""), pattern = paste("k", nstitches, sep = "")) %>% 
