@@ -176,7 +176,7 @@ p = p + scale_x_reverse(breaks = seq(from = nstitches, to = 1, by = -1)) +
 ggsave("knittingChart.jpg",plot = p, dpi = 300)
 ```
 
-```{r, fig.alt="Knitting chart illustrating the approximate location of the bobbles on a 200-stitch by 40-row knitting pattern."}
+```{r, fig.alt="Rectangular figure showing the approximate position of the bobbles on the scarf."}
 img = image_read("knittingChart.jpg")
 image_trim(img)
 ```
