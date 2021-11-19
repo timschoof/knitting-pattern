@@ -65,29 +65,9 @@ for (i in 1:tot_bobble_rows) {
     y = rep(i+nknit_start,bobbles_row)
   }
   else {
-    #if (method == "circular") {
-      prev_bobble = x_add[length(x_add)]
-      next_bobble = bobble_freq - (nstitches - prev_bobble)
-      x_add = seq(from = next_bobble, to = nstitches, by = bobble_freq)
-    # }
-    # else {
-    #   if ((i %% 2) == 0) {
-    #     # even rows
-    #     prev_bobble = x_add[length(x_add)]
-    #     next_bobble = nstitches - prev_bobble
-    #     
-    #     odd_dir_bobble = nstitches - (bobble_freq - next_bobble) + 1
-    #     
-    #     x_add = seq(from = odd_dir_bobble, to = 1, by = -1*bobble_freq)
-    #   }
-    #   else {
-    #     # odd rows
-    #     prev_bobble = x_add[length(x_add)]
-    #     next_bobble = (bobble_freq - prev_bobble) + 1
-    #     
-    #     x_add = seq(from = next_bobble, to = nstitches, by = bobble_freq)
-    #   }
-    # }
+    prev_bobble = x_add[length(x_add)]
+    next_bobble = bobble_freq - (nstitches - prev_bobble)
+    x_add = seq(from = next_bobble, to = nstitches, by = bobble_freq)
     bobbles_row = length(x_add)
     x = append(x, x_add)
     y_add = rep(i+nknit_start,bobbles_row)
@@ -169,8 +149,6 @@ p = p + scale_x_reverse(breaks = seq(from = nstitches, to = 1, by = -1)) +
         panel.grid.minor = element_line(size = 0.25, colour= "#b8b800"),
         axis.title = element_blank(),
         axis.ticks = element_blank(),
-        #axis.text.y = element_text(size = 10, face = "bold", colour = "black"),
-        #axis.text.x = element_blank(),
         axis.text = element_blank())
 
 ggsave("knittingChart.jpg",plot = p, dpi = 300)
